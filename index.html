@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web to APK Build Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white p-4 min-h-screen font-sans">
+  <div class="max-w-md mx-auto bg-slate-800 p-6 rounded-2xl shadow-2xl border border-slate-700">
+    <h1 class="text-2xl font-bold mb-6 text-center text-blue-400">Web to APK Studio</h1>
+    
+    <div class="space-y-4">
+      <!-- Pengaturan Aplikasi -->
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Nama Aplikasi</label>
+        <input type="text" id="appName" placeholder="Contoh: My App" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-blue-500">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">URL Website</label>
+        <input type="url" id="appUrl" placeholder="https://..." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-blue-500">
+      </div>
+
+      <hr class="border-slate-700 my-4">
+
+      <!-- Pengaturan Server GitHub -->
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Username GitHub</label>
+        <input type="text" id="ghUser" placeholder="Username tanpa spasi" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Nama Repository</label>
+        <input type="text" id="ghRepo" placeholder="Contoh: mesin-apk" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Token Akses (Personal Access Token)</label>
+        <input type="password" id="ghToken" placeholder="ghp_xxxx..." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Branch Target</label>
+        <select id="ghBranch" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none">
+          <option value="main">main</option>
+          <option value="master">master</option>
+        </select>
+      </div>
+
+      <button onclick="startBuild()" id="buildBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-lg mt-4 transition-all">
+        🚀 MULAI BUILD APK
+      </button>
+
+      <!-- Monitor Log -->
+      <div id="logBox" class="hidden mt-4 p-4 bg-slate-950 border border-slate-700 rounded-lg text-sm text-emerald-400 font-mono whitespace-pre-wrap"></div>
+    </div>
+  </div>
+
+  <script>
+    async function startBuild() {
+      const appName = document.getElementById('appName').value.trim();
+      const appUrl = document.getElementById('appUrl').value.trim();
+      const user = document.getElementById('ghUser').value.trim();
+      const repo = document.getElementById('ghRepo').value.trim();
+      const token = document.getElementById('ghToken').value.trim();
+      const branch = document.getElementById('ghBranch').value;
+      
+      const logBox = document.getElementById('logBox');
+      const btn = document.getElementById('buildBtn');
+
+      if (!appName || !appUrl || !user || !repo || !token) {
+        alert("Semua kolom wajib diisi!");
+        return;
+      }
+
+      logBox.classList.remove('hidden');
+      logBox.className = "mt-4 p-4 bg-slate-950 border border-slate-700 rounded-lg text-sm text-yellow-400 font-mono whitespace-pre-wrap";
+      logBox.innerText = "[Sistem] Menyiapkan paket data...\n[Sistem] Menghubungkan ke GitHub API...";
+      btn.disabled = true;
+      btn.innerText = "MEMPROSES...";
+
+      try {
+        const response = await fetch(`https://api.github.com/repos/${user}/${repo}/actions/workflows/build.yml/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ref: branch,
+            inputs: {
+              app_name: appName,
+              app_url: appUrl
+            }
+          })
+        });
+
+        if (response.ok) {
+          logBox.className = "mt-4 p-4 bg-slate-950 border border-slate-700 rounded-lg text-sm text-emerald-400 font-mono whitespace-pre-wrap";
+          logBox.innerText = "✅ PERINTAH DITERIMA!\n\nServer cloud GitHub sedang merakit APK kamu sekarang.\n\nBuka github.com -> Repositori kamu -> klik tab 'Actions' untuk melihat proses kompilasi secara live dan mendownload APK-nya saat selesai.";
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          logBox.className = "mt-4 p-4 bg-slate-950 border border-slate-700 rounded-lg text-sm text-red-400 font-mono whitespace-pre-wrap";
+          logBox.innerText = `❌ GAGAL OTORISASI (Kode: ${response.status})\n\nPenyebab: ${errorData.message || "Token/Repo tidak valid"}\n\nSolusi:\n1. Pastikan Token masih aktif dan memiliki izin 'repo' & 'workflow'.\n2. Pastikan file build.yml ada di dalam folder .github/workflows/\n3. Cek kembali nama Branch (main atau master).`;
+        }
+      } catch (error) {
+        logBox.className = "mt-4 p-4 bg-slate-950 border border-slate-700 rounded-lg text-sm text-red-400 font-mono whitespace-pre-wrap";
+        logBox.innerText = `❌ KONEKSI TERPUTUS\n\nDetail: ${error.message}\n\nPenyebab paling sering:\n1. Browser kamu memblokir request API (Adblocker/Brave Shield aktif).\n2. Format URL salah akibat salah ketik (spasi yang tidak sengaja).`;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 ULANGI BUILD";
+      }
+    }
+  </script>
+</body>
+</html>
